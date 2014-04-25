@@ -88,7 +88,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private int SERVER_PORT = 49005;
 	private int SERVER_PORT2 = 49006;
 	
-	private String SERVER_IP = "10.36.41.114";
+	private String SERVER_IP = null;
 	
 	private Button bForward;
 	private Button bBackward;
@@ -167,6 +167,13 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
+		
+		// IPActivity (the info user typed in) is stored in a Bundle and 
+		// passed to RoverControlActivity
+		Bundle extras = getIntent().getExtras();
+		SERVER_IP = extras.getString("serverIP");
+		
+		
 		pidControl = new PIDControl();
 		bForward = (Button) findViewById(R.id.btnForward);
 		bBackward = (Button) findViewById(R.id.btnBackward);
@@ -218,7 +225,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
          *
          */
         
-     // Create speech recognizer
+        	// Create speech recognizer
      		speech = SpeechRecognizer.createSpeechRecognizer(this);
 
      		Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -227,12 +234,12 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
      		intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
      				this.getPackageName());
      		// After analyzing user voice return top 5 best results
-     		intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+     		intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 10);
      		// Keep listener on for 1 second as soon as a voice is recognized
      		// This helps speed up the voice analyze process
      		intent.putExtra(
      				RecognizerIntent. EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
-     				1000);
+     				1500);
 
      		// Set up Text to Speech
      		startRepeat();
@@ -245,9 +252,6 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
      		
      		// Start Listener
      		speech.startListening(intent);
-        
-        
-        
 	    
 		try {
 			boolean resUpdater = updateLoop.serverConnect(SERVER_IP, SERVER_PORT2);

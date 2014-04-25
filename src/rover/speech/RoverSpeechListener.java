@@ -44,7 +44,7 @@ public class RoverSpeechListener implements RecognitionListener {
     public void onError(int error) {
     	// If an error occurs notify user and reset listener
     	// This is usually triggered if no speech is recognized
-    	Toast.makeText(context.getApplicationContext(), "Error", Toast.LENGTH_SHORT).show();
+    	Toast.makeText(context.getApplicationContext(), "Voice Recognition Error", Toast.LENGTH_SHORT).show();
     	speech.startListening(intent);
     }
 
