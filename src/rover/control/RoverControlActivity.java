@@ -10,6 +10,7 @@ import ioio.lib.util.IOIOLooper;
 import ioio.lib.util.android.IOIOActivity;
 import ioio.lib.android.bluetooth.*;
 import android.content.Context;
+import android.content.Intent;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -20,6 +21,10 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.TextToSpeech.OnInitListener;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -30,12 +35,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.Condition;
-
 import java.net.UnknownHostException;
 import java.io.IOException;
 
@@ -44,9 +49,10 @@ import rover.netclient.TCPNetClient;
 import rover.netclient.UDPNetClient;
 import rover.netclient.UDPUpdater;
 import rover.pid.PIDControl;
+import rover.speech.RoverSpeechListener;
 
 //public class ServoControlActivity extends AbstractIOIOActivity {
-public class RoverControlActivity extends IOIOActivity implements SensorEventListener, LocationListener, SeekBar.OnSeekBarChangeListener {
+public class RoverControlActivity extends IOIOActivity implements SensorEventListener, LocationListener, SeekBar.OnSeekBarChangeListener, OnInitListener {
 	public final static int NOCMD = 0;
 	public final static int FORWARD = 1;
 	public final static int BACKWARD = 2;
@@ -57,6 +63,8 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	public final static int SLIGHTLEFT = 7;
 	public final static int TIMEDPID = 8;
 	public final static int MANUAL = -1;
+	public static int VOICECMD = NOCMD;
+	public static int VOICESTATUS = 0;
 	public volatile int command = MANUAL;
 	
 	private PIDControl pidControl;
@@ -80,7 +88,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private int SERVER_PORT = 49005;
 	private int SERVER_PORT2 = 49006;
 	
-	private String SERVER_IP = "192.168.1.5";
+	private String SERVER_IP = "10.36.41.114";
 	
 	private Button bForward;
 	private Button bBackward;
@@ -126,6 +134,14 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private int steerPercent = 0;
 	private int desiredCourse = 0;
 	private int duration = 0;
+	
+	
+	// Speech Variables
+	private static final int VOICE_RECOGNITION_REQUEST_CODE = 1234;
+	// Speech Recognizer instance (analyzes user voice)
+	private SpeechRecognizer speech;
+	// Text To Speech instance (android Voice)
+	private TextToSpeech repeatTTS;
 	
 	
 	private static ToggleButton togSkyHookAccuracy;
@@ -198,6 +214,40 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
         togSkyHookAccuracy = (ToggleButton) findViewById(R.id.skyHookTogButton);
 	    
 	    
+        /** Speech Recognizer
+         *
+         */
+        
+     // Create speech recognizer
+     		speech = SpeechRecognizer.createSpeechRecognizer(this);
+
+     		Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+     		// Analyze English language
+     		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en");
+     		intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
+     				this.getPackageName());
+     		// After analyzing user voice return top 5 best results
+     		intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+     		// Keep listener on for 1 second as soon as a voice is recognized
+     		// This helps speed up the voice analyze process
+     		intent.putExtra(
+     				RecognizerIntent. EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
+     				1000);
+
+     		// Set up Text to Speech
+     		startRepeat();
+     		repeatTTS = new TextToSpeech(this, this);
+
+     		RoverSpeechListener speechListener = new RoverSpeechListener(this, speech,
+     				intent, repeatTTS);
+
+     		speech.setRecognitionListener(speechListener);
+     		
+     		// Start Listener
+     		speech.startListening(intent);
+        
+        
+        
 	    
 		try {
 			boolean resUpdater = updateLoop.serverConnect(SERVER_IP, SERVER_PORT2);
@@ -295,50 +345,23 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 						
 						// Manual Forward
 						if(bForward.isPressed()){
-							direction1.write(true);
-							direction2.write(false);
-							direction3.write(true);
-							direction4.write(false);
+							forward();
 						} 
 						else {	// Manual Backward
-							direction1.write(false);
-							direction2.write(true);
-							direction3.write(false);
-							direction4.write(true);
+							backward();
 						}
-						//pulseWidth range 0 - 1500
-						if(tMotor1.isChecked()) pwmMotor1.setPulseWidth(SPEED);
-						if(tMotor2.isChecked()) pwmMotor2.setPulseWidth(SPEED);
-						if(tMotor3.isChecked()) pwmMotor3.setPulseWidth(SPEED);
-						if(tMotor4.isChecked()) pwmMotor4.setPulseWidth(SPEED);
 					}
 					else if(bLeft.isPressed() || bRight.isPressed()) {
 		
 							// Manual Left				
 							if(bLeft.isPressed()){
-								direction1.write(false);
-								direction2.write(true);
-								direction3.write(true);
-								direction4.write(false);
+								left();
 							}
 							else { 	// Manual Right
-								direction1.write(true);
-								direction2.write(false);
-								direction3.write(false);
-								direction4.write(true);	
+								right();
 							}
-							//pulseWidth range 0 - 1500
-							if(tMotor1.isChecked()) pwmMotor1.setPulseWidth(SPEED);
-							if(tMotor2.isChecked()) pwmMotor2.setPulseWidth(SPEED);
-							if(tMotor3.isChecked()) pwmMotor3.setPulseWidth(SPEED);
-							if(tMotor4.isChecked()) pwmMotor4.setPulseWidth(SPEED);
-						
-					}
-					else {	// Stop
-						pwmMotor1.setPulseWidth(0);
-						pwmMotor2.setPulseWidth(0);
-						pwmMotor3.setPulseWidth(0);
-						pwmMotor4.setPulseWidth(0);
+					} else {	// Stop
+						stop();
 					}
 				Thread.sleep(10);
 			} catch (InterruptedException e) {
@@ -646,5 +669,34 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
     public void onStopTrackingTouch(SeekBar arg0) {
     	origSteerProgress = sBar_steer.getProgress();
     }
+    
+    
+    
+    /**
+     * Speech Recognition Methods
+     */
 	
+	void startRepeat() {
+		// prepare the TTS to repeat chosen words
+		Intent checkTTSIntent = new Intent();
+		// check TTS data
+		checkTTSIntent.setAction(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA);
+		// start the checking Intent - will retrieve result in onActivityResult
+		startActivityForResult(checkTTSIntent, VOICE_RECOGNITION_REQUEST_CODE);
+	}
+
+	/**
+	 * onInit fires when TTS initializes
+	 */
+	public void onInit(int initStatus) {
+		// if successful, set locale
+		if (initStatus == TextToSpeech.SUCCESS)
+			repeatTTS.setLanguage(Locale.ENGLISH);// ***choose your own locale
+													// here***
+	}
+	/*
+	public void setVoiceCMD(int cmd) {
+		 = cmd;
+	}
+    */
 }
