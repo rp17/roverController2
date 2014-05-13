@@ -32,9 +32,11 @@
         android:label="@string/app_name" >
         
         <activity
-            android:name="rover.control.IPActivity"
-            android:label="@string/app_name" >
-            
+            android:name=".RoverControlActivity"
+            android:label="@string/app_name"
+            android:configChanges="orientation|keyboardHidden"
+		    android:screenOrientation="portrait">
+		    
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -42,12 +44,12 @@
         </activity>
         
         
-        <activity
+        <!-- activity
 		        android:name="rover.control.RoverControlActivity"
 		        android:configChanges="orientation|keyboardHidden"
 		        android:label="ServoControlActivity" 
 		        android:screenOrientation="portrait">
-        </activity>
+        </activity -->
         
     </application>
 

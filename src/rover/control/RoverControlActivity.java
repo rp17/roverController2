@@ -44,12 +44,10 @@ import java.util.concurrent.locks.Condition;
 import java.net.UnknownHostException;
 import java.io.IOException;
 
-import rover.netclient.IPIDClient;
-import rover.netclient.TCPNetClient;
-import rover.netclient.UDPNetClient;
-import rover.netclient.UDPUpdater;
 import rover.pid.PIDControl;
 import rover.speech.RoverSpeechListener;
+import rover.websocket.AndroidCommand;
+import rover.websocket.AndroidUpdater;
 
 //public class ServoControlActivity extends AbstractIOIOActivity {
 public class RoverControlActivity extends IOIOActivity implements SensorEventListener, LocationListener, SeekBar.OnSeekBarChangeListener, OnInitListener {
@@ -109,8 +107,8 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 
 	
 	
-	private UDPNetClient clientLoop = new UDPNetClient(this);
-	private UDPUpdater updateLoop = new UDPUpdater(this);
+	private AndroidCommand androidcommand = new AndroidCommand(this);
+	private AndroidUpdater androidupdate = new AndroidUpdater();
 	private static float sensors[];
 	
 	private SensorManager mSensorManager;
@@ -160,19 +158,14 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 			int dur = bundle.getInt("duration");
 	
 			txtAndroidGPS.setText("command: " + cmd + ", speed: " + spd + " turn: " + tn + " cousre: " + dc + " duration: " + dur);
+			//Toast.makeText(getApplicationContext(), "command: " + cmd + ", speed: " + spd + " turn: " + tn + " cousre: " + dc + " duration: " + dur, Toast.LENGTH_LONG).show();
 		  }
 	};
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.main);
-		
-		// IPActivity (the info user typed in) is stored in a Bundle and 
-		// passed to RoverControlActivity
-		Bundle extras = getIntent().getExtras();
-		SERVER_IP = extras.getString("serverIP");
-		
+		setContentView(R.layout.main);	
 		
 		pidControl = new PIDControl();
 		bForward = (Button) findViewById(R.id.btnForward);
@@ -225,7 +218,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
          *
          */
         
-        	// Create speech recognizer
+        	/* Create speech recognizer
      		speech = SpeechRecognizer.createSpeechRecognizer(this);
 
      		Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -240,8 +233,9 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
      		intent.putExtra(
      				RecognizerIntent. EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
      				1500);
+			*/
 
-     		// Set up Text to Speech
+     		/* Set up Text to Speech
      		startRepeat();
      		repeatTTS = new TextToSpeech(this, this);
 
@@ -252,21 +246,33 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
      		
      		// Start Listener
      		speech.startListening(intent);
+	    	*/
 	    
-		try {
-			boolean resUpdater = updateLoop.serverConnect(SERVER_IP, SERVER_PORT2);
+	    
+		//try {
+			
+        	boolean resUpdater = androidupdate.connectWebSocket();
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         	if(resUpdater) {
-        		singleUpdatePool.execute(updateLoop);
+        		singleUpdatePool.execute(androidupdate);
         	}
-        	boolean res = clientLoop.serverConnect(SERVER_IP, SERVER_PORT);
+        	
         
+        	boolean res = androidcommand.connectWebSocket();
+			
         	if(res) {
-        		singleClientPool.execute(clientLoop);
+        		singleClientPool.execute(androidcommand);
         	}
         	
+	
         	
-        }
-        catch(final UnknownHostException ex) {
+       // }
+        /*catch(final UnknownHostException ex) {
         	runOnUiThread(new Runnable(){
    		 		@Override
    		 		public void run() {
@@ -284,6 +290,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
    		 		}
    		 	});
         }
+        */
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		enableUi(false);
 	}
@@ -591,7 +598,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	@Override
 	protected void onResume() {
 		super.onResume();
-		try {
+		/*try {
 			boolean res = clientLoop.serverConnect(SERVER_IP, SERVER_PORT);
 		} catch (UnknownHostException e) {
 			// TODO Auto-generated catch block
@@ -599,7 +606,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}
+		}*/
 	}
 	
     
@@ -698,9 +705,5 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 			repeatTTS.setLanguage(Locale.ENGLISH);// ***choose your own locale
 													// here***
 	}
-	/*
-	public void setVoiceCMD(int cmd) {
-		 = cmd;
-	}
-    */
+
 }
