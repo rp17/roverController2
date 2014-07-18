@@ -18,22 +18,22 @@ import rover.gps.GPS;
 public class Start {
 	
 	// PID max and mins
-	public static final int heading_min = -30;
-	public static final int heading_max = 30;
+	public static final int heading_min = -60;
+	public static final int heading_max = 60;
 	
 	public static final int altitude_max = 40;
 	public static final int altitude_min = -45;
 	
 	
 	//PID gains
-	//At the begining try to use only proportional.. 
+	//At the beginning try to use only proportional.. 
 	//The original configuration works fine in my simulator.. 
-	static final int 		Kp_heading = 10;
-	static final float	 	Ki_heading = (float) 0.01;
-	static final float		Kd_heading = (float) 0.001;
+	static final float 		Kp_heading = 0.5f;
+	static final float	 	Ki_heading = 0.01f;
+	static final float		Kd_heading = 0.001f;
 
 	static final int Kp_altitude = 4;
-	static final float Ki_altitude = (float) 0.001;
+	static final float Ki_altitude = 0.001f;
 	static final int Kd_altitude = 2;
 	
 	//PID loop variables
@@ -43,7 +43,7 @@ public class Start {
 	static float altitude_I; //Stores the result of the integrator
 	
 	
-	//PID K constants, defined at the begining of the code
+	//PID K constants, defined at the beginning of the code
 	public static final float  kp[]={Kp_heading,Kp_altitude};	
 	public static final float  ki[]={Ki_heading,Ki_altitude};	 
 	public static final float  kd[]={Kd_heading,Kd_altitude};

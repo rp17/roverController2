@@ -25,6 +25,7 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.TextToSpeech.OnInitListener;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -49,6 +50,7 @@ import rover.netclient.TCPNetClient;
 import rover.netclient.UDPNetClient;
 import rover.netclient.UDPUpdater;
 import rover.pid.PIDControl;
+import rover.pid.PIDTimer;
 import rover.speech.RoverSpeechListener;
 
 //public class ServoControlActivity extends AbstractIOIOActivity {
@@ -62,12 +64,20 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	public final static int SLIGHTRIGHT = 6;
 	public final static int SLIGHTLEFT = 7;
 	public final static int TIMEDPID = 8;
+	public final static int LeftObst = 9;
+	public final static int RightObst = 10;
 	public final static int MANUAL = -1;
 	public static int VOICECMD = NOCMD;
 	public static int VOICESTATUS = 0;
 	public volatile int command = MANUAL;
+	private final int obstDist = 5;
+	private final int leftTurnDeg = 30;
+	private final int rightTurnDeg = 30;
+	private boolean firstLeft = true;
+	private boolean firstRight = true;
+	private float newAzimut = 0.0f;
 	
-	private PIDControl pidControl;
+	
 	
 	private final static float CONTROL_FREQ = 100.0f; // Hz
 	private final static float ITER_DURATION = 1.0e6f/CONTROL_FREQ; // single control loop iteration duration in millisecs
@@ -117,10 +127,10 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	Sensor accelerometer;
 	Sensor magnetometer;
 	
-	public static volatile float azimut = 0.0f;
+	public static volatile float azimut = 0.0f; // in radians
 	static volatile float azimutPre = 0.0f;
 	static final float azimutGain = 0.7f;
-	public static volatile int avgAzimut = 0;
+	public static volatile int avgAzimut = 0; // in degrees
 	
 	
 	private LocationManager locationManager;
@@ -134,6 +144,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private int steerPercent = 0;
 	private int desiredCourse = 0;
 	private int duration = 0;
+	private volatile long durationMillis = 0;
 	
 	
 	// Speech Variables
@@ -159,7 +170,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 			int dc = bundle.getInt("desiredcourse"); 
 			int dur = bundle.getInt("duration");
 	
-			txtAndroidGPS.setText("command: " + cmd + ", speed: " + spd + " turn: " + tn + " cousre: " + dc + " duration: " + dur);
+			txtAndroidGPS.setText("command: " + cmd + ", speed: " + spd + " turn: " + tn + " course: " + dc + " duration: " + dur);
 		  }
 	};
 	
@@ -173,8 +184,6 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		Bundle extras = getIntent().getExtras();
 		SERVER_IP = extras.getString("serverIP");
 		
-		
-		pidControl = new PIDControl();
 		bForward = (Button) findViewById(R.id.btnForward);
 		bBackward = (Button) findViewById(R.id.btnBackward);
 		bLeft = (Button) findViewById(R.id.btnLeft);
@@ -226,6 +235,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
          */
         
         	// Create speech recognizer
+        /*
      		speech = SpeechRecognizer.createSpeechRecognizer(this);
 
      		Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -252,6 +262,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
      		
      		// Start Listener
      		speech.startListening(intent);
+     		*/
 	    
 		try {
 			boolean resUpdater = updateLoop.serverConnect(SERVER_IP, SERVER_PORT2);
@@ -301,6 +312,9 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		private DigitalOutput direction4;
 		
 		private AnalogInput sensor1;
+		
+		private PIDControl pidControl = new PIDControl();
+		private PIDTimer timer= new PIDTimer();
 
 		public void setup() throws ConnectionLostException {
 			try {
@@ -315,6 +329,9 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 				direction4 = ioio_.openDigitalOutput(DIRECTION4, true);
 				
 				sensor1 = ioio_.openAnalogInput(SENSOR1);
+				for(int i=0; i<distFwdBuf.length; i++) {
+					distFwdBuf[i] = 5.0f;
+				}
 				enableUi(true);
 				
 			} catch (ConnectionLostException e) {
@@ -331,20 +348,40 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 				}
 			});
 		}
-
+		private float[] distFwdBuf = new float[5];
 		public void loop() throws ConnectionLostException {
 			
-			updateGPS_UI();
-			
+			float distFwd;
+			float avgDistFwd = 10.0f;
+			//updateGPS_UI();
+			try {
+				distFwd = sensor1.read();
+				distFwd *= 100;
+				for(int i=0; i< (distFwdBuf.length - 1); i++) {
+					distFwdBuf[i] = distFwdBuf[i+1];
+				}
+				distFwdBuf[distFwdBuf.length - 1] = distFwd;
+				avgDistFwd = 0.0f;
+				for(float x: distFwdBuf) {
+					avgDistFwd += x;
+				}
+				avgDistFwd = avgDistFwd / distFwdBuf.length;
+				setText("" + Float.toString(avgDistFwd));
+			} catch (InterruptedException e) {
+				ioio_.disconnect();
+			} catch (ConnectionLostException e) {
+				enableUi(false);
+				throw e;
+			}
 			//command = clientLoop.cmd;
 			
 			if(command == MANUAL) {		// MANUAL
 				
 				//sBar_steer.setVisibility(View.VISIBLE);
 				SPEED = sBar.getProgress();
-				
+				Log.d("RoverController", "MANUAL, command: " + command);
 				try {
-					setText("" + sensor1.read());
+					
 					if(bForward.isPressed() || bBackward.isPressed()) {
 						
 						// Manual Forward
@@ -380,10 +417,10 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 			//sBar_steer.setVisibility(View.INVISIBLE); 
 			
 				try {
-					setText("" + sensor1.read());
-				
+					
+					Log.d("RoverController", "inside REMOTE");
 					switch(command) {
-					case TIMEDPID: timedPID(); break;
+					case TIMEDPID: timedPID(avgDistFwd); break;
 					case FORWARD: forward(); break;
 					case BACKWARD: backward(); break;
 					case SLIGHTLEFT: slightLeft(steerPercent); break;
@@ -391,6 +428,14 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 					case LEFT: left(); break;
 					case RIGHT: right(); break;
 					case STOP: stop(); break;
+					case LeftObst:
+						if(firstLeft) {
+							newAzimut = calcLeftAzimut(avgAzimut);
+							firstLeft = false;
+						}
+						leftUntilAzimut();
+						break;
+					case RightObst: break;
 					default: break;
 					}
 					Thread.sleep(10);
@@ -403,8 +448,96 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		}
 	}
 
-		
-	private void timedPID() {
+	private float calcLeftAzimut(float curAzimut) {
+		float resAzimut = curAzimut - leftTurnDeg;
+		if(resAzimut < -180) {
+			resAzimut = 360 + resAzimut;
+		}
+		return resAzimut;
+	}
+	private float calcRightAzimut(float curAzimut) {
+		float resAzimut = curAzimut + rightTurnDeg;
+		if(resAzimut > 180) {
+			resAzimut = resAzimut - 360;
+		}
+		return resAzimut;
+	}
+	
+	private float[] diffBuf = new float[10];
+	private void diffBufClear() {
+		for(int i = 0; i< diffBuf.length; ++i) {
+			diffBuf[i] = 0.0f;
+		}
+	}
+	private int diffSumCounter = 0;
+	private void resetTimerDiffCounter() {
+		timer.clear();
+		diffBufClear();
+		diffSumCounter = 0;
+	}
+	private void timedPID(float dist) 
+			throws ConnectionLostException 
+			{
+		Log.d("RoverController", "PID running");
+		timer.startTimer();
+		//float dt=((float)System.currentTimeMillis() - heading_PID_timer)/1000.0f;
+		final long timeLeft = timer.getTime();
+		if(timeLeft > durationMillis) {
+			resetTimerDiffCounter();
+			command = STOP;
+			runOnUiThread(new Runnable(){
+   		 		@Override
+   		 		public void run() {
+   		 		txtAndroidGPS.setText("command: " + command);
+   		 		}
+   		 	});
+			
+			
+			return;
+		} else {
+			if(dist < obstDist) {
+				command = LeftObst;
+				return;
+			}
+			diffSumCounter++;
+			final int courseError = (int) (desiredCourse - avgAzimut);
+			int diffControl = pidControl.PID_heading(courseError);
+			for(int i=0; i< (diffBuf.length - 1); i++) {
+				diffBuf[i] = diffBuf[i+1];
+			}
+			diffBuf[diffBuf.length - 1] = diffControl;
+			float diffSum = 0.0f; 
+			for(float x: diffBuf) {
+				diffSum += x;
+			}
+			final float avgDiff = diffSum*0.1f;
+			runOnUiThread(new Runnable(){
+   		 		@Override
+   		 		public void run() {
+   		 			txtAndroidGPS.setText("command: " + command + " time left " + timeLeft + " error " + courseError + " avgDiff " + avgDiff);
+   		 		}
+   		 	});
+			
+			final String msg = "PID: azimut: " + avgAzimut + " error " + courseError + " diff: " + avgDiff;
+			Log.d("RoverController", msg);
+			/*
+			runOnUiThread(new Runnable(){
+   		 		@Override
+   		 		public void run() {
+   		 			// User is at the waypoint. Display an alert toast for a few seconds
+   		 			Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_SHORT).show();
+   		 		}
+   		 	});
+   		 	*/
+			// Guessing for now
+			if(diffSumCounter > 9) {
+				if(avgDiff < 0) // steer left on negative diff and negative error
+					slightLeft(-(int)avgDiff);
+				else // steer right on negative diff and negative error
+					slightRight((int)avgDiff);
+			}
+				
+		}
 		
 	}
 	private void forward() throws ConnectionLostException {
@@ -425,6 +558,41 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		setSpeed();
 	}
 
+	
+	private void leftUntilAzimut() throws ConnectionLostException {
+		if(avgAzimut <= newAzimut) {
+			resetTimerDiffCounter();
+			firstLeft = true;
+			command = MANUAL;
+			return;
+		}
+		else {
+			left();
+		}
+		
+	}
+	
+	private void rightUntilAzimut() throws ConnectionLostException {
+		if(avgAzimut >= newAzimut) {
+			resetTimerDiffCounter();
+			firstRight = true;
+			command = MANUAL;
+			return;
+		}
+		else {
+			right();
+		}
+		
+	}
+	
+	private void leftUntilNoObst(float dist) throws ConnectionLostException {
+		if(dist < obstDist) {
+			left();
+		}
+		else {
+			command = TIMEDPID;
+		}
+	}
 	private void left() throws ConnectionLostException {
 		direction1.write(false);
 		direction2.write(true);
@@ -529,11 +697,15 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	public static float getSensorReadings(int indx){
 		return sensors[indx];
 	}
+	
 	private static boolean compFirstRun = true;
-	private static float[] azimBuf = new float[10];
+	private static float[] azimBuf = new float[20];
 	private float[] mGravity;
 	private float[] mGeomagnetic;
-	
+	private float azimAvg = 0.0f;
+	private float R[] = new float[9];
+	private float I[] = new float[9];
+	private float orientation[] = new float[3];
 	public void onSensorChanged(final SensorEvent event) {
 		sensors[0] = event.values[0];
 		sensors[1] = event.values[1];
@@ -543,13 +715,15 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
             if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
             		mGeomagnetic = event.values;
             if (mGravity != null && mGeomagnetic != null) {
-            		float R[] = new float[9];
-            		float I[] = new float[9];
+            		//float R[] = new float[9];
+            		//float I[] = new float[9];
             boolean success = SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic);
             		if (success) {
-            			float orientation[] = new float[3];
+            			//float orientation[] = new float[3];
             			SensorManager.getOrientation(R, orientation);
             			azimut = orientation[0]; // orientation contains: azimut, pitch and roll
+            			
+            			
             			if(compFirstRun) {
             				compFirstRun = false;
             				for(int i = 0; i<azimBuf.length; i++){
@@ -564,10 +738,13 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
             			}
             			float avg = 0.0f;
             			for(float x: azimBuf){
-        					avg += x; 
-        				}
-            			avg *= 0.1f;
-            			avgAzimut = (int)Math.toDegrees(avg);
+            				avg += x; 
+            			}
+            			avg *= 0.05f;
+            			
+            			avgAzimut = (int)Math.toDegrees(azimut);
+            			//avgAzimut = (int)Math.toDegrees(avg);
+            			
             			//azimut = azimutPre*azimutGain + azimut*(1-azimutGain);
             			//azimutPre = azimut;
                 		//tv_current_comp_course.setText(String.valueOf(avgAzimut) + " ");
@@ -647,6 +824,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	public void setDuration(int d) {
 		if(command != MANUAL) {
 			duration = d;
+			durationMillis = (long)d*1000;
 		}
 	}
 	

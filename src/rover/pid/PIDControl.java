@@ -5,16 +5,67 @@ import rover.autopilot.Start;
 
 public class PIDControl {
 	
-	static int heading_PID_timer; //Timer to calculate the dt of the PID
-	static float heading_D; //Stores the result of the derivator
-	static int heading_output; //Stores the result of the PID loop
+	private static int heading_PID_timer; //Timer to calculate the dt of the PID
+	private static float heading_D; //Stores the result of the derivator
+	private static float heading_output; //Stores the result of the PID loop
+	private static float scaler = 0.5f;
+	private static int timer;
 	
-
 	public PIDControl() {} // Constructor
+	
+	/*
+	public float constrain(float val, float max){
+		if(val < -max) return -max;
+		else if(val > max) return max;
+		else return val;
+	}
+	public float kp = 0.7f;
+	public float kd = 0;
+	public float ki = 0;
+	public float scaler = 5;
+	public static final float PI = (float)Math.PI;
+	protected float rc = 1/(PI*20);
+	
+	protected float prevError = 0;
+	protected float prevDeriv = 0;
+	protected float integrator = 0;
+	protected float imax = 20;
+	public void setFreqLPF(float freq){rc = 1/(PI*freq);}
+	public void setPrevState(float prevError, float prevDeriv) {this.prevError = prevError; this.prevDeriv = prevDeriv;}
+	public float pidCycle(float error) {
+		float dt=((float)System.currentTimeMillis() - timer)*1.0e-3f;
+		float out = 0;
+		//float dtSec = dt*1.0e-3f;
+		
+		float dtSec = dt;
+		
+		out += kp*error;
+		if( dt > 0) {
+			if(Math.abs(kd) > 0) {
+				float deriv = (error - prevError)/dtSec;
+				//deriv = prevDeriv + (dtSec/(rc + dtSec))*(deriv - prevDeriv);
+				prevError = error;
+				prevDeriv = deriv;
+				out += kd*deriv;
+			}
+			out *= scaler;
+			if(Math.abs(ki) > 0) {
+				integrator += ki*error*scaler*dtSec;
+				integrator = constrain(integrator, imax);
+				out += integrator;
+			}
+		}
+		else out *= scaler;
+		System.out.println("Output control = " + out);
+		out = constrain(out, 90);
+		timer = (int)System.currentTimeMillis();
+		return out;
+	}
+	*/
 	
 	public int PID_heading(int PID_error)
 	{ 
-	  float dt=((float)System.currentTimeMillis() - heading_PID_timer)/1000.0f;//calculating dt, you must divide it by 1000, because this system only understands seconds.. and is normally given in millis
+	  float dt=((float)System.currentTimeMillis() - heading_PID_timer)*1.0e-3f;//calculating dt, you must divide it by 1000, because this system only understands seconds.. and is normally given in millis
 
 
 	  //Integrator part
@@ -38,7 +89,7 @@ public class PIDControl {
 	  heading_PID_timer = (int)System.currentTimeMillis();//Saving the last execution time, important to calculate the dt...
 
 	  //Now checking if the user have selected normal or reverse mode (servo)... 
-	  
+	  /*
 	  if (Start.reverse_yaw == 1)  {
 	    return (int)(-1*heading_output); 
 	  }
@@ -46,6 +97,9 @@ public class PIDControl {
 	  {
 	    return (int)(heading_output);
 	  }
+	  */
+	  heading_output *= scaler;
+	  return (int)heading_output;
 	}
 	
 	

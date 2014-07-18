@@ -45,7 +45,7 @@
         <activity
 		        android:name="rover.control.RoverControlActivity"
 		        android:configChanges="orientation|keyboardHidden"
-		        android:label="ServoControlActivity" 
+		        android:label="RoverControlActivity" 
 		        android:screenOrientation="portrait">
         </activity>
         
