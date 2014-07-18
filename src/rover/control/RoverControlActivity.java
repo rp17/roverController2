@@ -8,7 +8,7 @@ import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
 //import ioio.lib.util.AbstractIOIOActivity;
 import ioio.lib.util.android.IOIOActivity;
-import ioio.lib.android.bluetooth.*;
+//import ioio.lib.android.bluetooth.*;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.Sensor;
@@ -21,7 +21,7 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.speech.RecognizerIntent;
+//import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.TextToSpeech.OnInitListener;
@@ -29,7 +29,7 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.view.View.OnClickListener;
+//import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -39,19 +39,19 @@ import android.widget.ToggleButton;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.Condition;
+//import java.util.concurrent.TimeUnit;
+//import java.util.concurrent.locks.ReentrantLock;
+//import java.util.concurrent.locks.Condition;
 import java.net.UnknownHostException;
 import java.io.IOException;
 
-import rover.netclient.IPIDClient;
-import rover.netclient.TCPNetClient;
+//import rover.netclient.IPIDClient;
+//import rover.netclient.TCPNetClient;
 import rover.netclient.UDPNetClient;
 import rover.netclient.UDPUpdater;
 import rover.pid.PIDControl;
 import rover.pid.PIDTimer;
-import rover.speech.RoverSpeechListener;
+//import rover.speech.RoverSpeechListener;
 
 //public class ServoControlActivity extends AbstractIOIOActivity {
 public class RoverControlActivity extends IOIOActivity implements SensorEventListener, LocationListener, SeekBar.OnSeekBarChangeListener, OnInitListener {
@@ -70,12 +70,13 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	public static int VOICECMD = NOCMD;
 	public static int VOICESTATUS = 0;
 	public volatile int command = MANUAL;
-	private final int obstDist = 5;
+	private final int obstDist = 7;
 	private final int leftTurnDeg = 30;
 	private final int rightTurnDeg = 30;
 	private boolean firstLeft = true;
 	private boolean firstRight = true;
 	private float newAzimut = 0.0f;
+	private final static float sensorDiffTolerance = 0.5f;
 	
 	
 	
@@ -91,7 +92,8 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private final int DIRECTION3 = 7;
 	private final int DIRECTION4 = 10;
 	private final int PWM_FREQ = 100;
-	private final int SENSOR1 = 35;
+	private final int SENSOR1 = 35; // right sonar
+	private final int SENSOR2 = 36; // left sonar
 	
 	private int SPEED = 1500;
 	
@@ -111,9 +113,12 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private ToggleButton tMotor4;
 	
 	private SeekBar sBar;
-	private SeekBar sBar_steer;
+	//private SeekBar sBar_steer;
+	private SeekBar sBar_R;
+	private SeekBar sBar_L;
 	
 	private TextView txtViewSensor1;
+	private TextView txtViewSensor2;
 	private static final ExecutorService singleClientPool = Executors.newSingleThreadExecutor();
 	private static final ExecutorService singleUpdatePool = Executors.newSingleThreadExecutor();
 
@@ -195,14 +200,19 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		tMotor4 = (ToggleButton) findViewById(R.id.tgMotor4);
 		
 		sBar = (SeekBar) findViewById(R.id.seekBar1);
-		sBar_steer = (SeekBar) findViewById(R.id.seekBar2);
-		sBar_steer.setProgress(sBar_steer.getMax()/2);
-		origSteerProgress = sBar_steer.getMax()/2;
-		sBar_steer.setOnSeekBarChangeListener(this);
+		
+		sBar_R = (SeekBar) findViewById(R.id.seekBarR);
+		sBar_R.setProgress(sBar_R.getMax()/2);
+		sBar_L = (SeekBar) findViewById(R.id.seekBarL);
+		sBar_L.setProgress(sBar_L.getMax()/2);
+		
+		//origSteerProgress = sBar_steer.getMax()/2;
+		//sBar_steer.setOnSeekBarChangeListener(this);
 		
 		
 		
-		txtViewSensor1 = (TextView) findViewById(R.id.txtVoltage);
+		txtViewSensor1 = (TextView) findViewById(R.id.txtVoltageR);
+		txtViewSensor2 = (TextView) findViewById(R.id.txtVoltageL);
 		sensors = new float[5];
 		//new IMU().start();
 		mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
@@ -311,7 +321,8 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		private DigitalOutput direction3;
 		private DigitalOutput direction4;
 		
-		private AnalogInput sensor1;
+		private AnalogInput sensor1; // right sonar
+		private AnalogInput sensor2; // left sonar
 		
 		private PIDControl pidControl = new PIDControl();
 		private PIDTimer timer= new PIDTimer();
@@ -329,8 +340,10 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 				direction4 = ioio_.openDigitalOutput(DIRECTION4, true);
 				
 				sensor1 = ioio_.openAnalogInput(SENSOR1);
-				for(int i=0; i<distFwdBuf.length; i++) {
-					distFwdBuf[i] = 5.0f;
+				sensor2 = ioio_.openAnalogInput(SENSOR2);
+				for(int i=0; i<distFwdBufR.length; i++) {
+					distFwdBufR[i] = 5.0f;
+					distFwdBufL[i] = 5.0f;
 				}
 				enableUi(true);
 				
@@ -340,7 +353,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 			}
 		}
 		
-		public void setText(final String msg){
+		public void setTextSensor1(final String msg){
 			runOnUiThread(new Runnable(){
 				@Override
 				public void run(){
@@ -348,25 +361,48 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 				}
 			});
 		}
-		private float[] distFwdBuf = new float[5];
+		public void setTextSensor2(final String msg){
+			runOnUiThread(new Runnable(){
+				@Override
+				public void run(){
+					txtViewSensor2.setText(msg);	
+				}
+			});
+		}
+		private float[] distFwdBufR = new float[5];
+		private float[] distFwdBufL = new float[5];
 		public void loop() throws ConnectionLostException {
 			
-			float distFwd;
-			float avgDistFwd = 10.0f;
+			float distFwdR;
+			float avgDistFwdR = 10.0f;
+			float distFwdL;
+			float avgDistFwdL = 10.0f;
 			//updateGPS_UI();
 			try {
-				distFwd = sensor1.read();
-				distFwd *= 100;
-				for(int i=0; i< (distFwdBuf.length - 1); i++) {
-					distFwdBuf[i] = distFwdBuf[i+1];
+				distFwdR = sensor1.read();
+				distFwdL = sensor2.read();
+				distFwdR *= 100;
+				distFwdL *= 100;
+				for(int i=0; i< (distFwdBufR.length - 1); i++) {
+					distFwdBufR[i] = distFwdBufR[i+1];
+					distFwdBufL[i] = distFwdBufL[i+1];
 				}
-				distFwdBuf[distFwdBuf.length - 1] = distFwd;
-				avgDistFwd = 0.0f;
-				for(float x: distFwdBuf) {
-					avgDistFwd += x;
+				distFwdBufR[distFwdBufR.length - 1] = distFwdR;
+				distFwdBufL[distFwdBufL.length - 1] = distFwdL;
+				avgDistFwdR = 0.0f;
+				avgDistFwdL = 0.0f;
+				for(float x: distFwdBufR) {
+					avgDistFwdR += x;
 				}
-				avgDistFwd = avgDistFwd / distFwdBuf.length;
-				setText("" + Float.toString(avgDistFwd));
+				for(float x: distFwdBufL) {
+					avgDistFwdL += x;
+				}
+				avgDistFwdR = avgDistFwdR / distFwdBufR.length;
+				avgDistFwdL = avgDistFwdL / distFwdBufL.length;
+				
+				setTextSensor1("" + Float.toString(avgDistFwdR));
+				setTextSensor2("" + Float.toString(avgDistFwdL));
+				
 			} catch (InterruptedException e) {
 				ioio_.disconnect();
 			} catch (ConnectionLostException e) {
@@ -420,7 +456,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 					
 					Log.d("RoverController", "inside REMOTE");
 					switch(command) {
-					case TIMEDPID: timedPID(avgDistFwd); break;
+					case TIMEDPID: timedPID(avgDistFwdL, avgDistFwdR); break;
 					case FORWARD: forward(); break;
 					case BACKWARD: backward(); break;
 					case SLIGHTLEFT: slightLeft(steerPercent); break;
@@ -435,7 +471,13 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 						}
 						leftUntilAzimut();
 						break;
-					case RightObst: break;
+					case RightObst: 
+						if(firstRight) {
+							newAzimut = calcRightAzimut(avgAzimut);
+							firstRight = false;
+						}
+						rightUntilAzimut();
+						break;
 					default: break;
 					}
 					Thread.sleep(10);
@@ -475,7 +517,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		diffBufClear();
 		diffSumCounter = 0;
 	}
-	private void timedPID(float dist) 
+	private void timedPID(float distL, float distR) 
 			throws ConnectionLostException 
 			{
 		Log.d("RoverController", "PID running");
@@ -495,9 +537,20 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 			
 			return;
 		} else {
-			if(dist < obstDist) {
-				command = LeftObst;
-				return;
+			if(distL < obstDist || distR < obstDist) {
+				if(Math.abs(distR - distL) > sensorDiffTolerance) {
+						if(distL < distR) {
+							command = RightObst;
+						}
+						else {
+							command = LeftObst;
+						}
+						return;
+				}
+				else {
+					command = LeftObst;
+					return;
+				}
 			}
 			diffSumCounter++;
 			final int courseError = (int) (desiredCourse - avgAzimut);
@@ -849,7 +902,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
     
     @Override
     public void onStopTrackingTouch(SeekBar arg0) {
-    	origSteerProgress = sBar_steer.getProgress();
+    	//origSteerProgress = sBar_steer.getProgress();
     }
     
     

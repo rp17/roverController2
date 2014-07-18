@@ -161,21 +161,36 @@
 	    android:orientation="horizontal"
 	    android:gravity="center" >
 	    
-	    <TextView
-	        android:id="@+id/txtRawVoltage"
-	        android:layout_width="wrap_content"
-	        android:layout_height="wrap_content">
-	    </TextView>
-	    
 		<TextView
-	        android:id="@+id/txtVoltage"
+	        android:id="@+id/txtVoltageR"
 	        android:layout_width="wrap_content"
 	        android:layout_height="wrap_content">
 	    </TextView>
 	    
 		
 			    <SeekBar
-	        android:id="@+id/seekBar2"
+	        android:id="@+id/seekBarR"
+	        android:layout_width="262dp"
+	        android:layout_height="wrap_content"
+	        android:max="100" />
+		
+		
+	</LinearLayout>
+	<LinearLayout
+	    android:layout_width="match_parent"
+	    android:layout_height="wrap_content"
+	    android:orientation="horizontal"
+	    android:gravity="center" >
+	    
+		<TextView
+	        android:id="@+id/txtVoltageL"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content">
+	    </TextView>
+	    
+		
+			    <SeekBar
+	        android:id="@+id/seekBarL"
 	        android:layout_width="262dp"
 	        android:layout_height="wrap_content"
 	        android:max="100" />
