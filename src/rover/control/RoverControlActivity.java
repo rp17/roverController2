@@ -703,7 +703,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private float[] mGravity;
 	private float[] mGeomagnetic;
 	private float azimAvg = 0.0f;
-	private float R[] = new float[9];
+	private float RMat[] = new float[9];
 	private float I[] = new float[9];
 	private float orientation[] = new float[3];
 	public void onSensorChanged(final SensorEvent event) {
@@ -717,10 +717,10 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
             if (mGravity != null && mGeomagnetic != null) {
             		//float R[] = new float[9];
             		//float I[] = new float[9];
-            boolean success = SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic);
+            boolean success = SensorManager.getRotationMatrix(RMat, I, mGravity, mGeomagnetic);
             		if (success) {
             			//float orientation[] = new float[3];
-            			SensorManager.getOrientation(R, orientation);
+            			SensorManager.getOrientation(RMat, orientation);
             			azimut = orientation[0]; // orientation contains: azimut, pitch and roll
             			
             			
