@@ -44,12 +44,15 @@ import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
 
 import android.app.Activity;
 import android.os.Environment;
@@ -94,8 +97,8 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	public static int VOICESTATUS = 0;
 	public volatile int command = MANUAL;
 	private final int obstDist = 7;
-	private final int leftTurnDeg = 15;
-	private final int rightTurnDeg = 15;
+	private final int leftTurnDeg = 30;
+	private final int rightTurnDeg = 30;
 	private boolean firstLeft = true;
 	private boolean firstRight = true;
 	private float newAzimut = 0.0f;
@@ -187,17 +190,24 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 	private static TextView txtAndroidGPS;
 	private TextView txtSkyHookGPS;
 	
+	//info used to save and view from the .txt file
 	private String filename = "MySampleFile.txt";
 	private String filepath = "MyFileStorage";
 	File myExternalFile;
 	String text;
-	String email = "tsullivan320@yahoo.com";
 	
+//	to see the text file and pull it from the phone to the computer, follow the following:
+//	PHONE MUST BE CONNECTED TO COMPUTER
+//	open DDMS (window > open perspective > DDMS
+//	Click the File Explorer Tab
+//	in File Explorer, follow the path: mnt\shell\emulated\0\Android\data\rover.control\files\MyFileStorage\MySampleFile
+//	click the pull file from device button in the top right and save it to computer
+	
+	//used for the neural network
 	jNeuralNet brain;
 	jGenAlg ga = new jGenAlg(10, jParams.dMutationRate, jParams.dCrossoverRate, 15);
 	Vector<jGenAlg.SGenome> population;
 	jGenAlg.SGenome currentGenome;
-
 	
 	public Handler handler = new Handler() {
 		  @Override
@@ -219,9 +229,10 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
 		
+		//the neural network part of the application, from RavenSteering_smartSweeper.java simulation code
 		System.out.println("Constructor for steering called");
 		//jParams.LoadInParameters("params.ini");
-		brain = new jNeuralNet(3,2,1,3);
+		brain = new jNeuralNet(3,2,1,3);  //creates the network with set number of inputs, outputs, hidden layers and neurons/hidden layer
 		population = new Vector<jGenAlg.SGenome>();
 		Vector<Double> weight = new Vector<Double>();
 		for (int j = 0; j < 10; j++){
@@ -241,13 +252,13 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		brain.PutWeights(currentGenome.vecWeights);
 		System.out.println("weights: " + brain.GetWeights());
 		
-		
+		//create the file to save and display information about the network to.
 		ContextWrapper contextWrapper = new ContextWrapper(getApplicationContext());
 		  File directory = contextWrapper.getDir(filepath, Context.MODE_PRIVATE);
 		  myExternalFile = new File(directory , filename);
 		  
-		  Button saveToExternalStorage = 
-				  (Button) findViewById(R.id.saveExternalStorage);
+		Button saveToExternalStorage = 
+				  (Button) findViewById(R.id.updateWeights);
 				  saveToExternalStorage.setOnClickListener(this);
 				 
 		Button readFromExternalStorage = 
@@ -255,12 +266,12 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 				readFromExternalStorage.setOnClickListener(this);
 		
 		Button sendFile = 
-				(Button) findViewById(R.id.sendFile);
+				(Button) findViewById(R.id.clearScreen);
 				sendFile.setOnClickListener(this);
 				
 		Button turnNNon = 
 				(Button) findViewById(R.id.turnNNon);
-				turnNNon.setOnClickListener(this);
+				turnNNon.setOnClickListener(this); //this button does nothing right now
 
 		
 		// IPActivity (the info user typed in) is stored in a Bundle and 
@@ -385,6 +396,7 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		enableUi(false);
 		
+		//needed in order to check if writing to file is available
 		if (!isExternalStorageAvailable() || isExternalStorageReadOnly()) {  
 			   saveToExternalStorage.setEnabled(false);
 			  } 
@@ -394,9 +406,9 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 
 	}
 	
+	//method used to perform actions of clicking the buttons
 	public void onClick(View v) {
 		
-		  //EditText myInputText = (EditText) findViewById(R.id.myInputText);
 		  TextView responseText = (TextView) findViewById(R.id.responseText);
 		  TextView showFile = (TextView) findViewById(R.id.showFile);
 		  String myData = "";
@@ -404,38 +416,69 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 		  myExternalFile.setReadable(true,false);
 
 		  switch (v.getId()) {
-		  case R.id.saveExternalStorage:
-		   try {
-		    FileOutputStream fos = new FileOutputStream(myExternalFile);
-		    fos.write(brain.GetWeights().toString().getBytes());
-		    fos.write(brain.getInputs());
-		    fos.close();
-		   } catch (IOException e) {
-		    e.printStackTrace();
-		   }
-		   showFile.setText("");
-		   responseText.setText("MySampleFile.txt saved to External Storage...");
+		  //if update weights button is pressed, display new set of weights. also write new set of weights to file
+		  case R.id.updateWeights:
+			brain.updateWeights();
+			try {
+			BufferedWriter bw = new BufferedWriter(new FileWriter(myExternalFile, true));
+			PrintWriter pw = new PrintWriter( bw, false);
+			pw.println("Weights: " + "\r\n" + brain.GetWeights() + "\r\n");
+			pw.close();
+			
+			FileInputStream fis = new FileInputStream(myExternalFile);
+		    DataInputStream in = new DataInputStream(fis);
+		    BufferedReader br = new BufferedReader(new InputStreamReader(in));
+		    StringBuilder sb = new StringBuilder();
+		    String line = br.readLine();
+		    while ( line != null) {
+		     myData = myData + line + "\r\n";
+		    	sb.append(line);
+		    	sb.append('\n');
+		    	line = br.readLine();
+		    }
+		    in.close();
+			} 
+			catch (IOException e) {
+			    e.printStackTrace();
+			   }
+		   showFile.setText(myData);
 		   break;
 		 
 		  case R.id.getExternalStorage:
+			  //saves the initial data to the file and display it on the screen. if pressed with multiple
+			  //sets of weights, the most recently updated set will be shown only.
 		   try {
-		    FileInputStream fis = new FileInputStream(myExternalFile);
-		    DataInputStream in = new DataInputStream(fis);
-		    BufferedReader br = 
-		     new BufferedReader(new InputStreamReader(in));
-		    String strLine;
-		    while ((strLine = br.readLine()) != null) {
-		     myData = myData + strLine;
+				BufferedWriter bw1 = new BufferedWriter(new FileWriter(myExternalFile, false));
+				PrintWriter pw1 = new PrintWriter( bw1, false);
+				pw1.println("Inputs: " + brain.getInputs() + "\r\n");
+				pw1.println("Outputs: " + brain.getOutputs() + "\r\n");
+				pw1.println("Hidden Layers: " + brain.getHiddenLyrs() + "\r\n");
+				pw1.println("Nuerons per Hidden Layer: " + brain.getNueronsPerHiddenLyr() + "\r\n");
+				pw1.println("Weights: " + "\r\n" + brain.GetWeights() + "\r\n");
+				pw1.close();
+			    //fos.close();
+			   
+		    FileInputStream fis1 = new FileInputStream(myExternalFile);
+		    DataInputStream in1 = new DataInputStream(fis1);
+		    BufferedReader br1 = new BufferedReader(new InputStreamReader(in1));
+		    StringBuilder sb1 = new StringBuilder();
+		    String line1 = br1.readLine();
+		    while ( line1 != null) {
+		     myData = myData + line1 + "\r\n";
+		    	sb1.append(line1);
+		    	sb1.append('\n');
+		    	line1 = br1.readLine();
 		    }
-		    in.close();
+		    in1.close();
 		   } catch (IOException e) {
 		    e.printStackTrace();
 		   }
 		   showFile.setText(myData);
-		   responseText.setText("MySampleFile.txt data retrieved from External Storage...");
+		   responseText.setText("MySampleFile.txt data retrieved:");
 		   break;
 		  
-		  case R.id.sendFile:
+		   //used to send the file via email, google drive, etc...
+		  /*case R.id.sendFile:
 			  try {
 					FileInputStream is = new FileInputStream(myExternalFile);
 					int size = is.available();
@@ -454,34 +497,21 @@ public class RoverControlActivity extends IOIOActivity implements SensorEventLis
 			  sendIntent.setType("text/plain");
 			  startActivity(Intent.createChooser(sendIntent, getResources().getText(R.string.send_to)));
 			  showFile.setText("");
-			  responseText.setText("select where to send 'mySampleFile' ");  
-		  break;
+			  responseText.setText("Select where to send 'mySampleFile' ");  
+		  break;*/
+		   
+		   //clears the screen of all information. Does not delete information in the txt file.
+		  case R.id.clearScreen:
+			  showFile.setText("");
+			  responseText.setText("");
+			  break;
 		  
 		  /*case R.id.turnNNon:
-			  System.out.println("Constructor for steering called");
-				jParams.LoadInParameters("params.ini");
-				brain = new jNeuralNet();
-				population = new Vector<jGenAlg.SGenome>();
-				Vector<Double> weight = new Vector<Double>();
-				for (int j = 0; j < 10; j++){
-					weight.clear();
-					for (int i = 0; i < brain.GetWeights().size(); ++i){
-						weight.add(utils.RandomClamped());
-					}
-					population.add(ga.new SGenome(weight, 0.0));
-				}
-				population = ga.Epoch(population);
-				currentGenome = ga.GetChromoRoulette();
-				if(currentGenome.vecWeights.size() == 15)
-					brain.PutWeights(currentGenome.vecWeights);
-				else
-					System.out.println("currentGenome.vecWeights has wrong size");
-				System.out.println("Size of vecWeights in currentGenome: " + currentGenome.vecWeights.size());
-				brain.PutWeights(currentGenome.vecWeights);
 			break;*/
 		  }
 		  }
 		  
+	//check is external storage is available
 		  private static boolean isExternalStorageReadOnly() {  
 			  String extStorageState = Environment.getExternalStorageState();  
 			  if (Environment.MEDIA_MOUNTED_READ_ONLY.equals(extStorageState)) {  

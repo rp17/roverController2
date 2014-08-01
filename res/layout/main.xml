@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="fill_parent"
-    android:layout_height="fill_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     tools:context=".RoverControlActivity" 
     >
-
+    <LinearLayout 
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:orientation="vertical">
+  
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:baselineAligned="false" >
-
+        
         <RelativeLayout
             android:layout_width="0dip"
             android:layout_height="wrap_content"
@@ -101,6 +105,7 @@
                 android:textOn="@string/motor_online" />
 		</RelativeLayout>
     </LinearLayout>
+
     
     <LinearLayout
         android:layout_width="match_parent"
@@ -230,10 +235,10 @@
         android:orientation="horizontal" >
 			    
      <Button
-        android:id="@+id/saveExternalStorage"
+        android:id="@+id/updateWeights"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Save Text" />
+        android:text="Update Weights" />
 
     <Button
         android:id="@+id/getExternalStorage"
@@ -242,15 +247,17 @@
         android:text="Display Text" />
     
     <Button
-        android:id="@+id/sendFile"
+        android:id="@+id/clearScreen"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Send to PC" />
+        android:text="  Clear  " />
     </LinearLayout>
- 
+
+    
  <TextView android:id="@+id/responseText"
      android:layout_width="wrap_content"
-  android:layout_height="wrap_content" android:padding="5dp"
+  android:layout_height="wrap_content" 
+  android:padding="5dp"
   android:text=""
   android:textAppearance="?android:attr/textAppearanceMedium" />
  
@@ -259,6 +266,7 @@
   android:layout_height="wrap_content" android:padding="5dp"
   android:text=""
   android:textAppearance="?android:attr/textAppearanceMedium" />
+ 
  
  
  <TextView android:layout_width="fill_parent"
@@ -274,3 +282,4 @@
   <requestFocus />
  </EditText>-->
 </LinearLayout>
+</ScrollView>
